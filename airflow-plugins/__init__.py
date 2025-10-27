@@ -10,6 +10,9 @@ from maintenance.iceberg_snapshot_operator import IcebergSnapshotOperator
 from maintenance.iceberg_compaction_operator import IcebergCompactionOperator
 from maintenance.iceberg_aging_operator import IcebergAgingOperator
 
+# Spark 플러그인 import
+from spark.keycloak_spark_operator import KeycloakSparkOperator
+
 
 class OracleToIcebergPlugin(AirflowPlugin):
     """Oracle to Iceberg 데이터 이관 플러그인"""
@@ -23,6 +26,7 @@ class OracleToIcebergPlugin(AirflowPlugin):
         IcebergSnapshotOperator,
         IcebergCompactionOperator,
         IcebergAgingOperator,
+        KeycloakSparkOperator,
     ]
     
     # Plugin에 Hook 등록
