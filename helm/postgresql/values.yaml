@@ -1,0 +1,45 @@
+# PostgreSQL Values for Airflow
+# Bitnami PostgreSQL Helm Chart
+
+auth:
+  postgresPassword: airflow-postgres
+  username: airflow
+  password: airflow-password
+  database: airflow
+
+persistence:
+  enabled: true
+  size: 20Gi
+  storageClass: local-path
+  accessModes:
+    - ReadWriteOnce
+
+primary:
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  
+  nodeSelector: {}
+  
+  affinity: {}
+  
+  tolerations: []
+
+readReplicas:
+  replicaCount: 1
+  
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+
+global:
+  storageClass: local-path
+

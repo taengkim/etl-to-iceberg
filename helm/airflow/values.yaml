@@ -1,0 +1,128 @@
+# Airflow Values
+# Apache Airflow Helm Chart with Celery Executor
+
+executor: CeleryExecutor
+
+# PostgreSQL 설정 (외부 서비스 사용)
+postgresql:
+  enabled: false
+
+externalDatabase:
+  type: postgres
+  host: postgresql.airflow.svc.cluster.local
+  port: 5432
+  database: airflow
+  user: airflow
+  password: airflow-password
+  sslmode: disable
+
+# Redis 설정 (외부 서비스 사용)
+redis:
+  enabled: false
+
+externalRedis:
+  host: redis-master.airflow.svc.cluster.local
+  port: 6379
+  password: ""
+
+# Airflow 설정
+airflow:
+  config:
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow-password@postgresql.airflow.svc.cluster.local:5432/airflow
+    AIRFLOW__CELERY__BROKER_URL: redis://@redis-master.airflow.svc.cluster.local:6379/0
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow-password@postgresql.airflow.svc.cluster.local:5432/airflow
+    AIRFLOW__API__AUTH_BACKEND: "airflow.api.auth.backend.basic_auth"
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "True"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    AIRFLOW__CORE__LOAD_DEFAULT_CONNECTIONS: "False"
+    
+  extraEnv:
+    - name: AIRFLOW__CORE__FERNET_KEY
+      value: ""  # 실제 환경에서는 보안상 안전한 키를 생성해야 합니다
+
+  image:
+    repository: apache/airflow
+    tag: 2.10.4
+    
+  defaultAirflowTag: 2.10.4
+  defaultAirflowRepository: apache/airflow
+
+# Webserver 설정
+webserver:
+  replicas: 1
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+
+# Scheduler 설정
+scheduler:
+  replicas: 1
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  
+  logGroomerSidecar:
+    enabled: false
+
+# Celery Worker 설정
+workers:
+  replicas: 2
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+  
+  logGroomerSidecar:
+    enabled: false
+
+# Flower (Celery monitoring) 설정
+flower:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+# Dags 폴더 설정 (Git Sync 사용)
+dags:
+  gitSync:
+    enabled: true
+    repo: https://github.com/your-org/your-repo.git  # 실제 Git 저장소로 변경 필요
+    branch: main
+    wait: 60
+    containerName: git-sync
+    uid: 65533
+    period: 60
+    depth: 1
+    maxFailures: 0
+
+# Logs 폴더 설정
+logs:
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: local-path
+
+# Ingress 설정
+ingress:
+  enabled: false
+  # webserver:
+  #   enabled: true
+  #   hostname: airflow.example.com
+

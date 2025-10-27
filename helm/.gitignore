@@ -1,0 +1,11 @@
+# Helm generated files
+**/*.tgz
+
+# Kubernetes secrets
+secrets.yaml
+*-secrets.yaml
+
+# Local overrides
+local-values.yaml
+*-local.yaml
+

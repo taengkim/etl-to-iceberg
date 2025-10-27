@@ -1,0 +1,20 @@
+# Apache Airflow (airflow environment에 이미 설치되어 있어야 함)
+# apache-airflow>=2.5.0
+
+# Oracle Database 연결
+cx_Oracle>=8.3.0
+oracledb>=1.4.0  # cx_Oracle의 최신 버전
+
+# Iceberg (선택사항 - pyiceberg 또는 pyspark 중 하나 선택)
+pyiceberg>=0.6.0
+
+# PySpark (선택사항 - PySpark 사용 시)
+pyspark>=3.4.0
+
+# Data processing
+pandas>=1.5.0
+pyarrow>=12.0.0
+numpy>=1.23.0
+
+# Utilities
+python-dateutil>=2.8.0

@@ -1,0 +1,36 @@
+# Redis Values for Airflow
+# Bitnami Redis Helm Chart
+
+architecture: standalone
+
+auth:
+  enabled: false
+
+master:
+  persistence:
+    enabled: true
+    size: 8Gi
+    storageClass: local-path
+    accessModes:
+      - ReadWriteOnce
+  
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "200m"
+  
+  nodeSelector: {}
+  
+  affinity: {}
+  
+  tolerations: []
+
+metrics:
+  enabled: false
+
+global:
+  storageClass: local-path
+

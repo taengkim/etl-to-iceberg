@@ -1,0 +1,117 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: airflow-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://airflow.apache.org
+    chart: airflow
+    targetRevision: 1.13.1
+    helm:
+      releaseName: airflow
+      valuesObject:
+        executors: CeleryExecutor
+        postgresql:
+          enabled: false
+        externalDatabase:
+          type: postgres
+          host: postgresql.airflow.svc.cluster.local
+          port: 5432
+          database: airflow
+          user: airflow
+          password: airflow-password
+          sslmode: disable
+        redis:
+          enabled: false
+        externalRedis:
+          host: redis-master.airflow.svc.cluster.local
+          port: 6379
+          password: ""
+        airflow:
+          config:
+            AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+            AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow-password@postgresql.airflow.svc.cluster.local:5432/airflow
+            AIRFLOW__CELERY__BROKER_URL: redis://@redis-master.airflow.svc.cluster.local:6379/0
+            AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow-password@postgresql.airflow.svc.cluster.local:5432/airflow
+            AIRFLOW__API__AUTH_BACKEND: airflow.api.auth.backend.basic_auth
+            AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "True"
+          extraEnv:
+            - name: AIRFLOW__CORE__FERNET_KEY
+              value: ""
+          image:
+            repository: apache/airflow
+            tag: 2.10.4
+          defaultAirflowTag: 2.10.4
+          defaultAirflowRepository: apache/airflow
+        webserver:
+          replicas: 1
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+        scheduler:
+          replicas: 1
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+        workers:
+          replicas: 2
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+        flower:
+          enabled: true
+          replicas: 1
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+        dags:
+          gitSync:
+            enabled: true
+            repo: https://github.com/your-org/your-repo.git
+            branch: main
+            wait: 60
+            containerName: git-sync
+            uid: 65533
+            period: 60
+            depth: 1
+            maxFailures: 0
+        logs:
+          persistence:
+            enabled: true
+            size: 10Gi
+            storageClass: local-path
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: airflow
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
