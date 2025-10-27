@@ -43,9 +43,9 @@ airflow:
 
   image:
     repository: apache/airflow
-    tag: 2.10.4
+    tag: 3.0.6
     
-  defaultAirflowTag: 2.10.4
+  defaultAirflowTag: 3.0.6
   defaultAirflowRepository: apache/airflow
 
 # Webserver 설정
@@ -103,7 +103,7 @@ flower:
 dags:
   gitSync:
     enabled: true
-    repo: https://github.com/your-org/your-repo.git  # 실제 Git 저장소로 변경 필요
+    repo: https://github.com/taengkim/etl-to-iceberg.git
     branch: main
     wait: 60
     containerName: git-sync

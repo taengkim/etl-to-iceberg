@@ -42,8 +42,8 @@ spec:
               value: ""
           image:
             repository: apache/airflow
-            tag: 2.10.4
-          defaultAirflowTag: 2.10.4
+            tag: 3.0.6
+          defaultAirflowTag: 3.0.6
           defaultAirflowRepository: apache/airflow
         webserver:
           replicas: 1
@@ -85,7 +85,7 @@ spec:
         dags:
           gitSync:
             enabled: true
-            repo: https://github.com/your-org/your-repo.git
+            repo: https://github.com/taengkim/etl-to-iceberg.git
             branch: main
             wait: 60
             containerName: git-sync

@@ -37,6 +37,7 @@ helm/
 ### 3. Apache Airflow
 - **Chart**: Apache Airflow
 - **버전**: 1.13.1
+- **Airflow**: 3.0.6
 - **Executor**: CeleryExecutor
 - **네임스페이스**: airflow
 - **컴포넌트**:
