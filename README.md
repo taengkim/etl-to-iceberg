@@ -16,41 +16,41 @@ Oracle 데이터베이스의 테이블 데이터를 Apache Iceberg 형식으로 
 ## 프로젝트 구조
 
 ```
-plugins/
-├── __init__.py                     # 통합 플러그인 등록
+airflow-plugins/                   # Airflow Custom Plugins
+├── __init__.py                    # 통합 플러그인 등록
 │
-├── oracle_to_iceberg/              # Oracle → Iceberg 데이터 이관 플러그인
+├── oracle_to_iceberg/             # Oracle → Iceberg 데이터 이관 플러그인
 │   ├── __init__.py
-│   ├── hooks.py                    # Oracle 연결 Hook
-│   ├── oracle_to_iceberg_operator.py      # 전체 데이터 이관 Operator
-│   └── oracle_to_iceberg_cdc_operator.py  # CDC 지원 Operator
+│   ├── hooks.py                   # Oracle 연결 Hook
+│   ├── oracle_to_iceberg_operator.py        # 전체 데이터 이관 Operator
+│   └── oracle_to_iceberg_cdc_operator.py     # CDC 지원 Operator
 │
-├── maintenance/                    # Iceberg 테이블 유지보수 플러그인
+├── maintenance/                   # Iceberg 테이블 유지보수 플러그인
 │   ├── __init__.py
-│   ├── iceberg_snapshot_operator.py       # 스냅샷 관리 Operator
-│   ├── iceberg_compaction_operator.py     # 데이터 압축 Operator
-│   └── iceberg_aging_operator.py          # 오래된 데이터 삭제 Operator
+│   ├── iceberg_snapshot_operator.py         # 스냅샷 관리 Operator
+│   ├── iceberg_compaction_operator.py       # 데이터 압축 Operator
+│   └── iceberg_aging_operator.py             # 오래된 데이터 삭제 Operator
 │
-└── utils/                          # 공유 유틸리티 모듈
+└── utils/                         # 공유 유틸리티 모듈
     ├── __init__.py
-    ├── catalog_manager.py          # Iceberg Catalog 관리
-    ├── dataframe_utils.py          # DataFrame 처리
-    ├── minio_manager.py           # MinIO Storage 관리
-    ├── schema_builder.py          # Iceberg 스키마 생성
-    └── type_converter.py          # Oracle → Iceberg 타입 변환
+    ├── catalog_manager.py         # Iceberg Catalog 관리
+    ├── dataframe_utils.py         # DataFrame 처리
+    ├── minio_manager.py          # MinIO Storage 관리
+    ├── schema_builder.py         # Iceberg 스키마 생성
+    └── type_converter.py         # Oracle → Iceberg 타입 변환
 
-dags/                               # Airflow DAG 예제
-├── oracle_to_iceberg_full_load.py
-├── oracle_to_iceberg_pyspark.py
-├── oracle_to_iceberg_cdc.py
-├── oracle_to_iceberg_full_process.py
-├── oracle_to_iceberg_partitioned.py
-├── oracle_to_iceberg_realtime_cdc.py
-├── iceberg_maintenance.py
-├── complete_workflow.py
-└── iceberg_snapshot_management.py
+airflow-dags/                      # Airflow DAG 예제 (자세한 내용은 airflow-dags/README.md 참조)
+├── oracle_to_iceberg_full_load.py           # 전체 로드
+├── oracle_to_iceberg_pyspark.py            # PySpark 사용
+├── oracle_to_iceberg_cdc.py                 # CDC 동기화
+├── oracle_to_iceberg_full_process.py       # 초기 로드 후 CDC
+├── oracle_to_iceberg_partitioned.py        # 파티션 테이블
+├── oracle_to_iceberg_realtime_cdc.py       # 실시간 CDC
+├── iceberg_maintenance.py                   # 유지보수
+├── complete_workflow.py                     # 전체 워크플로우
+└── iceberg_snapshot_management.py           # 스냅샷 관리
 
-helm/                             # Kubernetes 배포 (ArgoCD)
+helm/                              # Kubernetes 배포 (자세한 내용은 helm/README.md 참조)
 ├── argoapps/                      # ArgoCD Application 매니페스트
 │   ├── postgresql-app.yaml
 │   ├── redis-app.yaml
@@ -58,9 +58,9 @@ helm/                             # Kubernetes 배포 (ArgoCD)
 │   └── kustomization.yaml
 ├── postgresql/                    # PostgreSQL Helm values
 │   └── values.yaml
-├── redis/                        # Redis Helm values
+├── redis/                         # Redis Helm values
 │   └── values.yaml
-└── airflow/                      # Airflow Helm values
+└── airflow/                       # Airflow Helm values
     └── values.yaml
 ```
 
