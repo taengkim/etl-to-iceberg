@@ -20,9 +20,11 @@ Kubernetes에서 PySpark 작업을 실행하기 위한 Airflow Plugin입니다.
 
 Kubernetes Pod에서 Spark 작업을 실행하는 Operator입니다.
 
-**사용 예:**
+**사용 예 1: Python 함수 사용 (권장)**
+
 ```python
 from airflow_plugins.spark.keycloak_spark_operator import KeycloakSparkOperator
+from airflow_plugins.spark.example_function_usage import process_iceberg_data
 
 spark_job = KeycloakSparkOperator(
     task_id='run_spark_job',
@@ -40,21 +42,29 @@ spark_job = KeycloakSparkOperator(
     spark_executor_memory='2g',
     spark_executor_cores=2,
     spark_executor_instances=3,
+    python_function=process_iceberg_data,  # 함수로 전달!
+)
+```
+
+**사용 예 2: Python 스크립트 문자열 사용**
+
+```python
+spark_job = KeycloakSparkOperator(
+    task_id='run_spark_job',
+    keycloak_url='http://keycloak:8080',
+    keycloak_realm='spark',
+    client_id='spark-client',
+    client_secret='your-secret',
+    username='spark-user',
+    password='your-password',
+    spark_app_name='iceberg-etl-job',
     python_script='''
 from pyspark.sql import SparkSession
-from pyiceberg.catalog import load_catalog
 
-# SparkSession 생성
 spark = SparkSession.builder.appName("IcebergETL").getOrCreate()
 
-# Iceberg Catalog 로드
-catalog = load_catalog(
-    name="iceberg",
-    **{"uri": "http://iceberg-rest:8181"}
-)
-
 # Iceberg 테이블 읽기
-df = spark.table("iceberg.analytics.employees")
+df = spark.read.format("iceberg").table("iceberg.analytics.employees")
 
 # 데이터 처리
 result = df.filter(df.salary > 50000).groupBy("department").agg({"salary": "avg"})

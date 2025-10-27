@@ -8,8 +8,9 @@ Keycloak OAuth2 인증을 지원합니다.
 import os
 import json
 import tempfile
+import inspect
 import requests
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Callable
 from airflow import configuration
 from airflow.models import BaseOperator
 from airflow.utils.decorators import apply_defaults
@@ -41,7 +42,8 @@ class KeycloakSparkOperator(KubernetesPodOperator):
     :param spark_executor_cores: Executor 코어 수 (예: 2)
     :param spark_executor_instances: Executor 인스턴스 수
     :param spark_config: 추가 Spark 설정 (dict)
-    :param python_script: 실행할 Python 스크립트 내용
+    :param python_script: 실행할 Python 스크립트 내용 (문자열)
+    :param python_function: 실행할 Python 함수 (Callable)
     :param python_file: 실행할 Python 파일 경로
     :param py_files: 추가 Python 파일들 (zip 또는 .py)
     :param jars: 필요한 JAR 파일들
@@ -72,6 +74,7 @@ class KeycloakSparkOperator(KubernetesPodOperator):
         spark_executor_instances: int = 2,
         spark_config: Optional[Dict[str, str]] = None,
         python_script: Optional[str] = None,
+        python_function: Optional[Callable] = None,
         python_file: Optional[str] = None,
         py_files: Optional[List[str]] = None,
         jars: Optional[List[str]] = None,
@@ -100,11 +103,42 @@ class KeycloakSparkOperator(KubernetesPodOperator):
         self.spark_executor_instances = spark_executor_instances
         self.spark_config = spark_config or {}
         self.python_script = python_script
+        self.python_function = python_function
         self.python_file = python_file
         self.py_files = py_files or []
         self.jars = jars or []
         self.packages = packages or []
         self.spark_args = spark_args
+
+    def function_to_script(self, func: Callable) -> str:
+        """
+        Python 함수를 소스 코드 문자열로 변환
+        
+        :param func: Python 함수
+        :return: 소스 코드 문자열
+        """
+        try:
+            # 함수의 소스 코드 가져오기
+            source = inspect.getsource(func)
+            
+            # 함수 정의 라인 찾기
+            lines = source.split('\n')
+            indent_level = 0
+            
+            # 함수 이름 찾기 및 메인 실행 코드 추가
+            func_name = func.__name__
+            
+            # 완전한 실행 가능한 스크립트 생성
+            script = f"""{source}
+
+# 함수 실행
+if __name__ == "__main__":
+    {func_name}()
+"""
+            return script
+        
+        except Exception as e:
+            raise AirflowException(f"함수를 소스 코드로 변환 실패: {e}")
 
     def get_keycloak_token(self) -> str:
         """
@@ -209,7 +243,18 @@ class KeycloakSparkOperator(KubernetesPodOperator):
             token = self.get_keycloak_token()
             
             # 2. Python 스크립트 준비
-            if self.python_script:
+            if self.python_function:
+                # 함수를 소스 코드로 변환
+                self.log.info(f"Python 함수를 소스 코드로 변환: {self.python_function.__name__}")
+                script_content = self.function_to_script(self.python_function)
+                
+                # 임시 파일에 스크립트 작성
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+                    f.write(script_content)
+                    script_path = f.name
+                self.log.info(f"Python 함수를 임시 파일에 작성: {script_path}")
+            
+            elif self.python_script:
                 # 임시 파일에 스크립트 작성
                 with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
                     f.write(self.python_script)
@@ -221,7 +266,7 @@ class KeycloakSparkOperator(KubernetesPodOperator):
                 self.log.info(f"Python 파일 사용: {script_path}")
             
             else:
-                raise AirflowException("python_script 또는 python_file 중 하나는 필수입니다.")
+                raise AirflowException("python_script, python_function 또는 python_file 중 하나는 필수입니다.")
             
             # 3. Spark 명령어 생성
             cmd = self.build_spark_command(token, script_path)
