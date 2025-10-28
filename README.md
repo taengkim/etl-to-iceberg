@@ -1,6 +1,6 @@
-# Oracle to Iceberg Airflow Plugin
+# ETL to Iceberg Airflow Plugin
 
-Oracle 데이터베이스의 테이블 데이터를 Apache Iceberg 형식으로 이관하는 Airflow 플러그인입니다.
+Oracle 데이터베이스 및 HDFS의 데이터를 Apache Iceberg 형식으로 이관하는 Airflow 플러그인입니다.
 
 ## 주요 기능
 
@@ -25,6 +25,12 @@ airflow-plugins/                   # Airflow Custom Plugins
 │   ├── oracle_to_iceberg_operator.py        # 전체 데이터 이관 Operator
 │   └── oracle_to_iceberg_cdc_operator.py     # CDC 지원 Operator
 │
+├── hdfs_to_iceberg/               # HDFS → Iceberg 데이터 이관 플러그인
+│   ├── __init__.py
+│   ├── hooks.py                   # HDFS 연결 Hook
+│   ├── hdfs_to_iceberg_operator.py           # 전체 데이터 이관 Operator
+│   └── hdfs_to_iceberg_cdc_operator.py       # CDC 지원 Operator
+│
 ├── maintenance/                   # Iceberg 테이블 유지보수 플러그인
 │   ├── __init__.py
 │   ├── iceberg_snapshot_operator.py         # 스냅샷 관리 Operator
@@ -35,20 +41,29 @@ airflow-plugins/                   # Airflow Custom Plugins
     ├── __init__.py
     ├── catalog_manager.py         # Iceberg Catalog 관리
     ├── dataframe_utils.py         # DataFrame 처리
+    ├── function_converter.py      # 함수 → 스크립트 변환
+    ├── keycloak_auth.py          # Keycloak 인증
     ├── minio_manager.py          # MinIO Storage 관리
     ├── schema_builder.py         # Iceberg 스키마 생성
+    ├── spark_builder.py          # Spark 설정 및 Session 생성
     └── type_converter.py         # Oracle → Iceberg 타입 변환
 
-airflow-dags/                      # Airflow DAG 예제 (자세한 내용은 airflow-dags/README.md 참조)
-├── oracle_to_iceberg_full_load.py           # 전체 로드
-├── oracle_to_iceberg_pyspark.py            # PySpark 사용
-├── oracle_to_iceberg_cdc.py                 # CDC 동기화
-├── oracle_to_iceberg_full_process.py       # 초기 로드 후 CDC
-├── oracle_to_iceberg_partitioned.py        # 파티션 테이블
-├── oracle_to_iceberg_realtime_cdc.py       # 실시간 CDC
-├── iceberg_maintenance.py                   # 유지보수
-├── complete_workflow.py                     # 전체 워크플로우
-└── iceberg_snapshot_management.py           # 스냅샷 관리
+airflow-dags/                      # Airflow DAG 예제
+├── Oracle Example DAGs/
+│   ├── oracle_to_iceberg_full_load.py           # 전체 로드
+│   ├── oracle_to_iceberg_pyspark.py            # PySpark 사용
+│   ├── oracle_to_iceberg_cdc.py                 # CDC 동기화
+│   ├── oracle_to_iceberg_full_process.py       # 초기 로드 후 CDC
+│   ├── oracle_to_iceberg_partitioned.py        # 파티션 테이블
+│   └── oracle_to_iceberg_realtime_cdc.py       # 실시간 CDC
+├── HDFS Example DAGs/
+│   ├── hdfs_to_iceberg_full_load.py            # 전체 로드
+│   ├── hdfs_to_iceberg_cdc.py                  # CDC 동기화
+│   └── hdfs_to_iceberg_partitioned.py          # 파티션 단위 처리
+└── Iceberg Maintenance/
+    ├── iceberg_maintenance.py                   # 유지보수
+    ├── complete_workflow.py                     # 전체 워크플로우
+    └── iceberg_snapshot_management.py           # 스냅샷 관리
 
 helm/                              # Kubernetes 배포 (자세한 내용은 helm/README.md 참조)
 ├── argoapps/                      # ArgoCD Application 매니페스트
@@ -322,6 +337,102 @@ transfer_dynamic = OracleToIcebergOperator(
 | `chunksize` | int | No | 청크 크기 (대용량 데이터 처리) |
 | `mode` | str | No | 쓰기 모드 ('append' 또는 'overwrite') |
 | `partition_by` | list | No | 파티션 컬럼 목록 |
+
+## HDFS to Iceberg 사용 방법
+
+### 1. 전체 데이터 이관 (Full Load)
+
+```python
+from airflow import DAG
+from airflow.utils.dates import days_ago
+from hdfs_to_iceberg import HdfsToIcebergOperator
+
+dag = DAG(
+    'hdfs_to_iceberg_full_load',
+    default_args={
+        'owner': 'data-engineering',
+        'start_date': days_ago(1),
+    },
+    schedule_interval='@daily',
+    catchup=False,
+    params={  # DAG 레벨 설정
+        'catalog_name': 'iceberg',
+        'catalog_uri': 'http://iceberg-rest:8181',
+        'warehouse_path': 's3://iceberg/warehouse',
+    },
+)
+
+transfer_task = HdfsToIcebergOperator(
+    task_id='transfer_hdfs_orc',
+    dag=dag,
+    hdfs_path='hdfs://namenode:9000/data/mytable',
+    iceberg_namespace='analytics',
+    iceberg_table='mytable',
+    mode='append',
+)
+```
+
+### 2. Partition 단위 처리
+
+```python
+# 특정 partition만 처리
+transfer_partition = HdfsToIcebergOperator(
+    task_id='transfer_partition',
+    dag=dag,
+    hdfs_path='hdfs://namenode:9000/data/mytable/dt',
+    iceberg_namespace='analytics',
+    iceberg_table='mytable',
+    partition_column='dt',  # Hive-style partition 컬럼
+    partition_value=['2024-01-01', '2024-01-02'],  # 특정 날짜만
+    mode='append',
+)
+
+# 각 partition을 개별적으로 처리
+transfer_separately = HdfsToIcebergOperator(
+    task_id='transfer_separately',
+    dag=dag,
+    hdfs_path='hdfs://namenode:9000/data/mytable/dt',
+    iceberg_namespace='analytics',
+    iceberg_table='mytable',
+    partition_column='dt',
+    process_partitions_separately=True,  # 각 partition 개별 처리
+    mode='append',
+)
+```
+
+### 3. CDC를 통한 증분 동기화
+
+```python
+from hdfs_to_iceberg import HdfsToIcebergCDCOperator
+
+cdc_task = HdfsToIcebergCDCOperator(
+    task_id='hdfs_cdc',
+    dag=dag,
+    hdfs_path='hdfs://namenode:9000/data/mytable',
+    iceberg_namespace='analytics',
+    iceberg_table='mytable',
+    cdc_method='mtime',  # 수정 시간 기반 변경점 감지
+    mode='append',
+)
+```
+
+### 4. Spark 설정 최적화
+
+```python
+transfer_optimized = HdfsToIcebergOperator(
+    task_id='transfer_optimized',
+    dag=dag,
+    hdfs_path='hdfs://namenode:9000/data/large_table',
+    iceberg_namespace='analytics',
+    iceberg_table='large_table',
+    spark_config={
+        'spark.executor.memory': '4g',
+        'spark.executor.cores': '2',
+        'spark.executor.instances': '4',
+    },
+    mode='append',
+)
+```
 
 ## 데이터 타입 매핑
 
