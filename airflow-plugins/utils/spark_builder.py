@@ -245,7 +245,7 @@ def create_iceberg_spark_session(
     # 기본 설정
     spark_config = {
         'spark.app.name': app_name,
-        'spark.sql.parquet.compression.codec': 'snappy',
+        'spark.sql.parquet.compression.codec': 'zstd',
         **iceberg_config
     }
     
