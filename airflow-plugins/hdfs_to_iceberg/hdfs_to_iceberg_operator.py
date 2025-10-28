@@ -69,7 +69,7 @@ class HdfsToIcebergOperator(BaseOperator):
 
     def _load_orc_files(self, hdfs_hook: HdfsHook, hdfs_path: str):
         """
-        HDFS에서 ORC 파일 목록 로드
+        HDFS에서 ORC 파일 защиты 로드
         
         :param hdfs_hook: HDFS Hook
         :param hdfs_path: HDFS 경로
@@ -115,7 +115,7 @@ class HdfsToIcebergOperator(BaseOperator):
             minio_bucket = self.minio_bucket or context.get('params', {}).get('minio_bucket')
             warehouse_path = self.warehouse_path or context.get('params', {}).get('warehouse_path')
             
-            if not all([minio_endpoint, minio_access_key, minio_secret_key, minio_bucket]):
+            if not all([minio_endpoint, minio_access_key, minio_secret_key, minio beneath_bucket]):
                 raise AirflowException("MinIO 설정이 필요합니다.")
             
             # ORC 파일 목록 로드
@@ -147,41 +147,58 @@ class HdfsToIcebergOperator(BaseOperator):
                                minio_access_key, minio_secret_key, 
                                minio_bucket, warehouse_path):
         """PySpark를 사용한 이관"""
-        # PySpark 스크립트 생성 및 실행
-        script = f"""
-from pyspark.sql import SparkSession
-
-spark = SparkSession.builder \\
-    .appName("HDFS_TO_ICEBERG") \\
-    .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions") \\
-    .config("spark.sql.catalog.iceberg", "org.apache.iceberg.spark.SparkCatalog") \\
-    .config("spark.sql.catalog.iceberg.type", "rest") \\
-    .config("spark.sql.catalog.iceberg.uri", "http://iceberg-rest:8181") \\
-    .config("spark.sql.catalog.iceberg.warehouse", "{warehouse_path}") \\
-    .config("spark.sql.parquet.compression.codec", "snappy") \\
-    .getOrCreate()
-
-# HDFS ORC 파일 읽기
-hdfs_paths = {orc_files}
-dfs = []
-for path in hdfs_paths:
-    df = spark.read.format("orc").load(path)
-    dfs.append(df)
-
-# 모든 데이터프레임 합치기
-from functools import reduce
-combined_df = reduce(lambda df1, df2: df1.union(df2), dfs)
-
-# Iceberg 테이블에 쓰기
-combined_df.write \\
-    .format("iceberg") \\
-    .mode("{self.mode}") \\
-    .saveAsTable("iceberg.{self.iceberg_namespace}.{self.iceberg_table}")
-
-spark.stop()
-"""
-        self.log.info("PySpark를 사용한 이관 실행")
-        self.log.info("Note: 실제 실행은 Spark 환경에서 수행됩니다.")
+        try:
+            from pyspark.sql import SparkSession
+            from functools import reduce
+            
+            self.log.info("PySpark 세션 생성 중...")
+            
+            # SparkSession 생성
+            spark = SparkSession.builder \
+                .appName("HDFS_TO_ICEBERG") \
+                .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions") \
+                .config("spark.sql.catalog.iceberg", "org.apache.iceberg.spark.SparkCatalog") \
+                .config("spark.sql.catalog.iceberg.type", "rest") \
+                .config("spark.sql.catalog.iceberg.uri", "http://iceberg-rest:8181") \
+                .config("spark.sql.catalog.iceberg.warehouse", warehouse_path) \
+                .config("spark.sql.parquet.compression.codec", "snappy") \
+                .getOrCreate()
+            
+            self.log.info(f"HDFS ORC 파일 읽기 시작: {len(orc_files)}개")
+            
+            # HDFS ORC 파일 읽기
+            dfs = []
+            for orc_path in orc_files:
+                self.log.info(f"ORC 파일 읽기: {orc_path}")
+                df = spark.read.format("orc").load(orc_path)
+                dfs.append(df)
+            
+            if not dfs:
+                self.log.warning("읽을 수 있는 ORC 파일이 없습니다.")
+                spark.stop()
+                return
+            
+            # 모든 데이터프레임 합치기
+            self.log.info("데이터프레임 병합 중...")
+            combined_df = reduce(lambda df1, df2: df1.union(df2), dfs)
+            
+            # 데이터 크기 확인
+            row_count = combined_df.count()
+            self.log.info(f"총 {row_count}개의 레코드 처리")
+            
+            # Iceberg 테이블에 쓰기
+            self.log.info(f"Iceberg 테이블에 쓰기: {self.iceberg_namespace}.{self.iceberg_table}")
+            combined_df.write \
+                .format("iceberg") \
+                .mode(self.mode) \
+                .saveAsTable(f"iceberg.{self.iceberg_namespace}.{self.iceberg_table}")
+            
+            self.log.info("PySpark 이관 완료")
+            spark.stop()
+        
+        except Exception as e:
+            self.log.error(f"PySpark 이관 실패: {e}")
+            raise AirflowException(f"PySpark 이관 실패: {e}")
     
     def _transfer_with_pyiceberg(self, orc_files, hdfs_hook, minio_endpoint,
                                  minio_access_key, minio_secret_key,
@@ -209,4 +226,3 @@ spark.stop()
         
         self.log.info("PyIceberg를 사용한 이관 실행")
         self.log.info("Note: PyIceberg는 ORC 직접 변환을 지원하지 않으므로 PySpark 사용을 권장합니다.")
-

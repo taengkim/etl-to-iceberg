@@ -215,7 +215,7 @@ class HdfsToIcebergCDCOperator(BaseOperator):
                 return
             
             # 변경된 파일 이관
-            self.log.info(f"변경된 {len(changed_files.se)}개의 파일 이관 시작")
+            self.log.info(f"변경된 {len(changed_files)}개의 파일 이관 시작")
             
             # PySpark를 사용한 이관
             if self.use_pyspark:

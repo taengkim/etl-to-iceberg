@@ -206,7 +206,7 @@ def build_iceberg_spark_config(
         config[f'spark.sql.catalog.{catalog_name}.uri'] = catalog_uri
     
     if warehouse_path:
-        config[f性地.[catalog_name}.warehouse'] = warehouse_path
+        config[f'spark.sql.catalog.{catalog_name}.warehouse'] = warehouse_path
     
     return config
 
