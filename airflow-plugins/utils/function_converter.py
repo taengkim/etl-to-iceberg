@@ -5,7 +5,7 @@ Python 함수를 소스 코드 문자열로 변환하는 공통 함수들입니�
 """
 
 import inspect
-from typing import Callable, Optional
+from typing import Callable, Optional, List
 from airflow.exceptions import AirflowException
 
 
