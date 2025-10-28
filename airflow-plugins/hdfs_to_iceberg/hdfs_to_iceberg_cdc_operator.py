@@ -271,7 +271,8 @@ if "{self.mode}" == "upsert":
     combined_df.write \\
         .format("iceberg") \\
         .mode("overwrite") \\
-        .saveAsTable("iceberg.{self.iceberg_namespace}.================================================================else:
+        .saveAsTable("iceberg.{self.iceberg_namespace}.{self.iceberg_table}")
+else:
     # Append 모드
     combined_df.write \\
         .format("iceberg") \\
