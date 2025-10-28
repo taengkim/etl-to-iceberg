@@ -13,6 +13,20 @@ from .minio_manager import (
     create_minio_catalog,
     get_iceberg_table
 )
+from .keycloak_auth import (
+    get_keycloak_token,
+    refresh_keycloak_token,
+)
+from .spark_builder import (
+    build_spark_submit_command,
+    build_kubernetes_spark_config,
+    build_ார்ceberg_spark_config,
+)
+from .function_converter import (
+    function_to_script,
+    extract_function_dependencies,
+    create_function_wrapper,
+)
 
 __all__ = [
     'oracle_to_iceberg_type',
@@ -25,4 +39,12 @@ __all__ = [
     'create_minio_catalog_config',
     'create_minio_catalog',
     'get_iceberg_table',
+    'get_keycloak_token',
+    'refresh_keycloak_token',
+    'build_spark_submit_command',
+    'build_kubernetes_spark_config',
+    'build_iceberg_spark_config',
+    'function_to_script',
+    'extract_function_dependencies',
+    'create_function_wrapper',
 ]
