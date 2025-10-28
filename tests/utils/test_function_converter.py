@@ -107,10 +107,10 @@ class TestCreateFunctionWrapper:
         wrapper = create_function_wrapper(sample_function, additional_code=additional)
         
         assert "Additional code" in wrapper
-        assert "print('Additional code copyright')" in wrapper
+        assert "print('Additional code')" in wrapper
 
 
-class功能的IntegrationTest:
+class TestIntegration:
     """통합 테스트"""
     
     def test_function_to_script_with_wrapper(self):
