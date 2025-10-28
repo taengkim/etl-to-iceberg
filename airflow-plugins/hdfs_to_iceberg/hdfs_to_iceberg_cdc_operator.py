@@ -11,7 +11,8 @@ from airflow.models import BaseOperator
 from airflow.utils.decorators import apply_defaults
 from airflow.exceptions import AirflowException
 from .hooks import HdfsHook
-from utils.minio_manager import create_minio_catalog
+from utils.spark_builder import create_iceberg_spark_session
+from functools import reduce
 
 
 class HdfsToIcebergCDCOperator(BaseOperator):
@@ -22,10 +23,12 @@ class HdfsToIcebergCDCOperator(BaseOperator):
     :param hdfs_path: HDFS ORC 파일 경로 또는 디렉토리
     :param iceberg_namespace: Iceberg namespace
     :param iceberg_table: Iceberg 테이블명
-    :諷param cdc_method: CDC 방법 ('size', 'mtime', 'hash')
+    :param cdc_method: CDC 방법 ('size', 'mtime', 'hash')
     :param metadata_table: 메타데이터 저장 테이블
     :param mode: 쓰기 모드 ('append', 'upsert')
     :param primary_key: Primary key (upsert 시 필요)
+    :param catalog_name: Iceberg catalog 이름
+    :param catalog_uri: Iceberg REST Catalog URI
     """
 
     template_fields = ('hdfs_path', 'iceberg_table', 'iceberg_namespace', 'metadata_table')
@@ -46,7 +49,8 @@ class HdfsToIcebergCDCOperator(BaseOperator):
         minio_secret_key: str = None,
         minio_bucket: str = None,
         warehouse_path: str = None,
-        use_pyspark: bool = True,
+        catalog_name: str = 'iceberg',
+        catalog_uri: str = 'http://iceberg-rest:8181',
         spark_config: Optional[Dict[str, str]] = None,
         *args,
         **kwargs
@@ -66,7 +70,8 @@ class HdfsToIcebergCDCOperator(BaseOperator):
         self.minio_secret_key = minio_secret_key
         self.minio_bucket = minio_bucket
         self.warehouse_path = warehouse_path
-        self.use_pyspark = use_pyspark
+        self.catalog_name = catalog_name
+        self.catalog_uri = catalog_uri
         self.spark_config = spark_config or {}
 
     def _get_last_checkpoint(self, hdfs_hook: HdfsHook, context: Dict) -> Dict:
@@ -200,9 +205,14 @@ class HdfsToIcebergCDCOperator(BaseOperator):
             minio_secret_key = self.minio_secret_key or context.get('params', {}).get('minio_secret_key')
             minio_bucket = self.minio_bucket or context.get('params', {}).get('minio_bucket')
             warehouse_path = self.warehouse_path or context.get('params', {}).get('warehouse_path')
+            catalog_name = self.catalog_name or context.get('params', {}).get('catalog_name', 'iceberg')
+            catalog_uri = self.catalog_uri or context.get('params', {}).get('catalog_uri')
             
             if not all([minio_endpoint, minio_access_key, minio_secret_key, minio_bucket]):
                 raise AirflowException("MinIO 설정이 필요합니다.")
+            
+            if not catalog_uri:
+                raise AirflowException("catalog_uri 설정이 필요합니다.")
             
             # 마지막 체크포인트 가져오기
             last_checkpoint = self._get_last_checkpoint(hdfs_hook, context)
@@ -218,10 +228,9 @@ class HdfsToIcebergCDCOperator(BaseOperator):
             self.log.info(f"변경된 {len(changed_files)}개의 파일 이관 시작")
             
             # PySpark를 사용한 이관
-            if self.use_pyspark:
-                self._transfer_changes_with_pyspark(changed_files, hdfs_hook, minio_endpoint,
-                                                   minio_access_key, minio_secret_key,
-                                                   minio_bucket, warehouse_path)
+            self._transfer_changes_with_pyspark(changed_files, hdfs_hook, minio_endpoint,
+                                               minio_access_key, minio_secret_key,
+                                               minio_bucket, warehouse_path, catalog_name, catalog_uri)
             
             # 체크포인트 저장
             new_checkpoint = {
@@ -239,48 +248,63 @@ class HdfsToIcebergCDCOperator(BaseOperator):
 
     def _transfer_changes_with_pyspark(self, changed_files, hdfs_hook, minio_endpoint,
                                       minio_access_key, minio_secret_key,
-                                      minio_bucket, warehouse_path):
+                                      minio_bucket, warehouse_path, catalog_name, catalog_uri):
         """PySpark를 사용한 변경된 파일 이관"""
-        script = f"""
-from pyspark.sql import SparkSession
-
-spark = SparkSession.builder \\
-    .appName("HDFS_TO_ICEBERG_CDC") \\
-    .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions") \\
-    .config("spark.sql.catalog.iceberg", "org.apache.iceberg.spark.SparkCatalog") \\
-    .config("spark.sql.catalog.iceberg.type", "rest") \\
-    .config("spark.sql.catalog.iceberg.uri", "http://iceberg-rest:8181") \\
-    .config("spark.sql.catalog.iceberg.warehouse", "{warehouse_path}") \\
-    .config("spark.sql.parquet.compression.codec", "snappy") \\
-    .getOrCreate()
-
-# 변경된 HDFS ORC 파일 읽기
-changed_files = {changed_files}
-dfs = []
-for file_path in changed_files:
-    df = spark.read.format("orc").load(file_path)
-    dfs.append(df)
-
-# 모든 데이터프레임 합치기
-from functools import reduce
-combined_df = reduce(lambda df1, df2: df1.union(df2), dfs)
-
-# Upsert 모드인 경우
-if "{self.mode}" == "upsert":
-    # TODO: Upsert 로직 구현 (Merge Into 사용)
-    combined_df.write \\
-        .format("iceberg") \\
-        .mode("overwrite") \\
-        .saveAsTable("iceberg.{self.iceberg_namespace}.{self.iceberg_table}")
-else:
-    # Append 모드
-    combined_df.write \\
-        .format("iceberg") \\
-        .mode("append") \\
-        .saveAsTable("iceberg.{self.iceberg_namespace}.{self.iceberg_table}")
-
-spark.stop()
-"""
-        self.log.info("PySpark를 사용한 CDC 이관 실행")
-        self.log.info(f"변경된 파일 수: {len(changed_files)}")
+        try:
+            self.log.info("PySpark를 사용한 CDC 이관 실행")
+            self.log.info(f"변경된 파일 수: {len(changed_files)}")
+            
+            # SparkSession 생성
+            spark = create_iceberg_spark_session(
+                app_name='HDFS_TO_ICEBERG_CDC',
+                catalog_name=catalog_name,
+                catalog_uri=catalog_uri,
+                warehouse_path=warehouse_path,
+                additional_config=self.spark_config
+            )
+            
+            self.log.info("HDFS ORC 파일 읽기 시작")
+            
+            # 변경된 HDFS ORC 파일 읽기
+            dfs = []
+            for orc_path in changed_files:
+                self.log.info(f"ORC 파일 읽기: {orc_path}")
+                df = spark.read.format("orc").load(orc_path)
+                dfs.append(df)
+            
+            if not dfs:
+                self.log.warning("읽을 수 있는 ORC 파일이 없습니다.")
+                spark.stop()
+                return
+            
+            # 모든 데이터프레임 합치기
+            self.log.info("데이터프레임 병합 중...")
+            combined_df = reduce(lambda df1, df2: df1.union(df2), dfs)
+            
+            # 데이터 크기 확인
+            row_count = combined_df.count()
+            self.log.info(f"총 {row_count}개의 레코드 처리")
+            
+            # Upsert 모드인 경우
+            if self.mode == "upsert":
+                # TODO: Upsert 로직 구현 (Merge Into 사용)
+                self.log.info("Upsert 모드로 쓰기 (현재는 overwrite로 처리)")
+                combined_df.write \
+                    .format("iceberg") \
+                    .mode("overwrite") \
+                    .saveAsTable(f"iceberg.{self.iceberg_namespace}.{self.iceberg_table}")
+            else:
+                # Append 모드
+                self.log.info(f"Append 모드로 쓰기: {self.iceberg_namespace}.{self.iceberg_table}")
+                combined_df.write \
+                    .format("iceberg") \
+                    .mode("append") \
+                    .saveAsTable(f"iceberg.{self.iceberg_namespace}.{self.iceberg_table}")
+            
+            self.log.info("CDC 이관 완료")
+            spark.stop()
+        
+        except Exception as e:
+            self.log.error(f"PySpark CDC 이관 실패: {e}")
+            raise AirflowException(f"CDC 이관 실패: {e}")
 

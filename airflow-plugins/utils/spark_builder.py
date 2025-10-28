@@ -4,7 +4,7 @@ Spark 명령어 빌더 유틸리티
 Spark submit 명령어를 생성하는 공통 함수들입니다.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 
 def build_spark_submit_command(
@@ -209,4 +209,63 @@ def build_iceberg_spark_config(
         config[f'spark.sql.catalog.{catalog_name}.warehouse'] = warehouse_path
     
     return config
+
+
+def create_iceberg_spark_session(
+    app_name: str,
+    catalog_name: str = 'iceberg',
+    catalog_uri: Optional[str] = None,
+    warehouse_path: Optional[str] = None,
+    additional_config: Optional[Dict[str, str]] = None,
+    master: Optional[str] = None
+) -> Any:
+    """
+    Iceberg용 SparkSession 생성
+    
+    :param app_name: Spark 애플리케이션 이름
+    :param catalog_name: Catalog 이름
+    :param catalog_uri: Iceberg REST Catalog URI
+    :param warehouse_path: Iceberg Warehouse 경로
+    :param additional_config: 추가 Spark 설정
+    :param master: Spark Master URL (기본값: None)
+    :return: SparkSession
+    """
+    try:
+        from pyspark.sql import SparkSession
+    except ImportError:
+        raise ImportError("PySpark가 설치되지 않았습니다.")
+    
+    # Iceberg 설정 생성
+    iceberg_config = build_iceberg_spark_config(
+        catalog_name=catalog_name,
+        catalog_uri=catalog_uri,
+        warehouse_path=warehouse_path
+    )
+    
+    # 기본 설정
+    spark_config = {
+        'spark.app.name': app_name,
+        'spark.sql.parquet.compression.codec': 'snappy',
+        **iceberg_config
+    }
+    
+    # 추가 설정 적용
+    if additional_config:
+        spark_config.update(additional_config)
+    
+    # SparkSession 빌더 생성
+    spark_builder = SparkSession.builder.appName(app_name)
+    
+    # Master 설정
+    if master:
+        spark_builder = spark_builder.master(master)
+    
+    # 모든 설정 적용
+    for key, value in spark_config.items():
+        spark_builder = spark_builder.config(key, value)
+    
+    # SparkSession 생성
+    spark = spark_builder.getOrCreate()
+    
+    return spark
 
