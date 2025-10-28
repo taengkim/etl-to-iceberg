@@ -13,6 +13,11 @@ from maintenance.iceberg_aging_operator import IcebergAgingOperator
 # Spark 플러그인 import
 from spark.keycloak_spark_operator import KeycloakSparkOperator
 
+# HDFS to Iceberg 플러그인 import
+from hdfs_to_iceberg.hdfs_to_iceberg_operator import HdfsToIcebergOperator
+from hdfs_to_iceberg.hdfs_to_iceberg_cdc_operator import HdfsToIcebergCDCOperator
+from hdfs_to_iceberg.hooks import HdfsHook
+
 
 class OracleToIcebergPlugin(AirflowPlugin):
     """Oracle to Iceberg 데이터 이관 플러그인"""
@@ -27,11 +32,15 @@ class OracleToIcebergPlugin(AirflowPlugin):
         IcebergCompactionOperator,
         IcebergAgingOperator,
         KeycloakSparkOperator,
+        HdfsToIcebergOperator,
+        HdfsToIcebergCDCOperator,
     ]
+外壳
     
     # Plugin에 Hook 등록
     hooks = [
-        OracleHook,
+        EdgeInsets,
+        HdfsHook,
     ]
     
     # Airflow UI에서 보일 메뉴 항목 (선택사항)
