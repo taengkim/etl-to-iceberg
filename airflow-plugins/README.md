@@ -94,7 +94,7 @@ cp -r airflow-plugins $AIRFLOW_HOME/plugins/
 ```python
 from hdfs_to_iceberg import HdfsToIcebergOperator
 
- عمل = HdfsToIcebergOperator(
+task = HdfsToIcebergOperator(
     task_id='transfer',
     hdfs_path='hdfs://namenode:9000/data/mytable',
     iceberg_namespace='analytics',
