@@ -115,7 +115,7 @@ class HdfsToIcebergOperator(BaseOperator):
             minio_bucket = self.minio_bucket or context.get('params', {}).get('minio_bucket')
             warehouse_path = self.warehouse_path or context.get('params', {}).get('warehouse_path')
             
-            if not all([minio_endpoint, minio_access_key, minio_secret_key, minio beneath_bucket]):
+            if not all([minio_endpoint, minio_access_key, minio_secret_key, minio_bucket]):
                 raise AirflowException("MinIO 설정이 필요합니다.")
             
             # ORC 파일 목록 로드

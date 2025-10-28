@@ -235,7 +235,7 @@ if __name__ == "__main__":
         
         :param context: Airflow context
         """
-        self.log.info(f"Keycloak Spark 작업 시작: FIspark_app_name=self.spark_app_name}")
+        self.log.info(f"Keycloak Spark 작업 시작: {self.spark_app_name}")
         
         try:
             # 1. Keycloak 토큰 획득
