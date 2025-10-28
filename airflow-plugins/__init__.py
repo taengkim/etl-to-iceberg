@@ -35,11 +35,10 @@ class OracleToIcebergPlugin(AirflowPlugin):
         HdfsToIcebergOperator,
         HdfsToIcebergCDCOperator,
     ]
-外壳
     
     # Plugin에 Hook 등록
     hooks = [
-        EdgeInsets,
+        OracleHook,
         HdfsHook,
     ]
     
